@@ -1,0 +1,218 @@
+Project at a glance
+quantlens is a GPT-2 small inference engine written from scratch in PyTorch, used to measure where int8 quantization hurts the model and whether a rescaling fix repairs it.
+Formal title: Where Does Int8 Break? A From-Scratch GPT-2 Inference Engine and Quantization Failure Analysis
+Research question: Which layers and activation channels cause int8 quantization error in GPT-2 small, and does a SmoothQuant-style rescaling recover the lost perplexity?
+Item
+Decision
+Model
+GPT-2 small, 124M parameters
+Language and framework
+Python, PyTorch (CPU build)
+Evaluation data
+WikiText-2 test set, measured as perplexity
+Hardware
+Laptop CPU, no GPU needed (my estimate: slow but workable)
+Duration
+5 to 6 weeks part-time (estimate)
+Deliverables
+Public repo, pytest suite, saved benchmark results, 3 to 4 page report, README with architecture diagram
+Why this project
+Independent of TrackML and the energy-research work, not data analytics, and it shows engineering and diagnosis together
+
+Naming
+Name the repo quantlens: short, descriptive, and it says what the project is for. I have not checked whether the name is taken, so search GitHub and PyPI before your first commit.
+Option
+Style
+Verdict
+quantlens
+A lens on quantization error
+Recommended
+int8-autopsy
+Memorable, slightly jokey
+Good second choice
+gpt2-quant-lab
+Plain and searchable
+Safe fallback
+
+Python package: quantlens, matching the repo name.
+GitHub description: A from-scratch GPT-2 inference engine for studying where low-bit quantization breaks.
+Topics: pytorch, llm-inference, quantization, gpt-2, transformers.
+Rules: lowercase, no spaces, and keep "from scratch" in the description, not the name.
+Stack and tools
+Use plain PyTorch on CPU for the engine; everything else exists to test and measure it.
+Layer
+Use
+Why
+Language
+Python 3.12 (use 3.13 only if PyTorch publishes a wheel for it; check pytorch.org)
+Stable library support
+Engine
+PyTorch tensor ops and torch.nn.functional primitives (softmax, GELU, matmul)
+You write the model, not the primitives
+Reference model
+transformers (Hugging Face)
+Weights, tokenizer and test oracle only
+Data
+datasets for WikiText-2
+Standard perplexity benchmark
+Tests
+pytest, torch.testing.assert_close, fixed seeds
+Reference-matching tests are the proof
+Plots
+matplotlib
+Figures for the report
+Config
+Plain argparse and JSON
+No framework to learn
+Environment
+venv and a pinned requirements.txt
+Reproducible installs
+CI
+GitHub Actions on Ubuntu, CPU only
+Free for public repos
+
+The "from scratch" boundary. You write attention, LayerNorm, the MLP, embeddings, the KV cache, sampling and every quantizer. Engine code never imports a Hugging Face model class.
+Which AI agent to use. The repo, not the tool, holds the plan, so any agent works. Put the rules in SPEC.md, then add one-line AGENTS.md, CLAUDE.md and GEMINI.md files that say "read SPEC.md first".
+Agent
+Best use here
+Antigravity
+Scaffolding, test boilerplate, benchmark scripts, when quota allows
+Codex
+Bounded tasks written from a spec: tests, refactors, CI file
+Claude (Claude Code or this chat)
+Review, debugging logit mismatches, explaining concepts, report editing
+
+Working rules with AI agents
+You write the core math; agents write scaffolding, tests and plots; you read every diff before it is committed. Interviewers will ask about the core code, so it has to be yours.
+You write
+The agent may write
+Attention, LayerNorm, MLP, embeddings
+Repo scaffold, pyproject or requirements
+KV cache and generation loop
+Pytest boilerplate from your test spec
+Every quantizer and the rescaling fix
+Benchmark scripts and plotting code
+Outlier analysis and the report's discussion
+README formatting, CI YAML
+
+A good test of ownership: if you cannot explain a function without opening it, rewrite it from memory.
+Prompt template for each phase (paste into any agent):
+Read SPEC.md first.
+Task: <one phase, one sentence>.
+Gate: <the exact test that must pass>.
+Constraints: no Hugging Face model classes in src/quantlens; PyTorch CPU only;
+Windows-safe paths (pathlib); fixed seeds.
+Stop after the gate passes and show me the pytest output. Do not start the next phase.
+Review checklist before every commit
+Tests pass on your own machine, not just in the agent's output.
+You read the diff and can explain each new function.
+No transformers model import inside src/quantlens.
+No weights, datasets or .venv committed.
+Every number you quote came from a file in results/.
+Ask the agent: "Quiz me with 3 questions on what you just wrote."
+Windows habits. A new PowerShell tab opens in your home folder, so cd into quantlens first. Use python, not python3, and keep one tab for commands.
+Repository layout
+One file per concern, and results/ is the only source for any number you quote.
+quantlens/
+  README.md
+  SPEC.md                  contract every agent follows
+  AGENTS.md CLAUDE.md GEMINI.md    one line each: "read SPEC.md"
+  requirements.txt
+  src/quantlens/
+    model.py               GPT-2 forward pass (you write)
+    weights.py             load Hugging Face weights into your model
+    kvcache.py             key/value cache
+    generate.py            greedy and top-k sampling
+    quant/
+      int8.py              weight-only per-tensor and per-channel
+      act.py               activation quantization (W8A8)
+      smooth.py            SmoothQuant-style rescaling
+    eval/
+      perplexity.py        WikiText-2, sliding window
+      bench.py             latency and memory
+      outliers.py          activation statistics
+  tests/
+    test_logits_match_hf.py
+    test_kvcache_equivalence.py
+    test_quant_roundtrip.py
+  scripts/run_experiments.py
+  results/                 JSON or CSV from every run
+  reports/                 figures and the PDF report
+  .github/workflows/tests.yml
+Add .gitignore entries for .venv/, __pycache__/, model weights and the dataset cache.
+Build phases and gates
+The build runs in seven phases, and each one ends with a test that must pass before the next begins.
+[embed: node/58cb49bb-18fb]
+Read top to bottom. Stopping after P4 still leaves a complete, tested engine with a weight-quantization study.
+Experiment design
+Every variant is measured the same way, on the same text, with a hypothesis written down before the run.
+Variant
+What changes
+Question it answers
+V0
+fp32 baseline
+The reference number
+V1
+Weight-only int8, per-tensor scale
+How much does coarse scaling cost?
+V2
+Weight-only int8, per-channel scale
+Does finer scaling recover it?
+V3
+Weights and activations int8 (W8A8), naive
+Do activations break first?
+V4
+W8A8 plus SmoothQuant-style rescaling
+Does the fix work?
+V5 (stretch)
+Int4 group-wise weights
+Where is the real breaking point?
+
+Metrics for every variant
+Perplexity: WikiText-2 test set, sliding window, context 1024 (GPT-2's context length), fixed stride, same for all variants.
+Memory: bytes of weights, computed from tensor sizes.
+Latency: tokens per second at context lengths 128, 512 and 1024, batch size 1, with and without the KV cache. Report the median of 3 runs.
+Diagnosis experiments
+Layer sensitivity: quantize one transformer block at a time and record the perplexity change per block.
+Outlier statistics: for each linear layer input, the ratio of the largest per-channel activation range to the median channel. A few dominant channels would explain naive W8A8 failing.
+Hypotheses to write down before running (these are guesses, not results): naive W8A8 degrades more than weight-only int8, and a small number of channels dominate activation range. If either is wrong, report that.
+Figures for the report: perplexity by variant, perplexity change by layer, outlier ratio by layer, tokens per second against context length.
+Risks and pivots
+The most likely failure is a quiet one: the project finishes but shows nothing surprising. Each risk below has a planned response.
+Risk
+What to do
+Naive int8 barely hurts GPT-2 small, so nothing "breaks"
+Move the study to int4 group-wise (V5). "GPT-2 small is robust at int8" is still a valid, reportable finding
+Quantized CPU inference is not faster (dequantization overhead)
+Report it as a finding. Claim memory savings, not speed, unless measured
+Logits do not match Hugging Face in Phase 1
+Check the usual GPT-2 traps: Conv1D weights are stored transposed, GELU is the tanh approximation, LayerNorm epsilon is 1e-5, the output head shares the token embedding, and the attention mask is causal
+The space is crowded (tinygpt, inf-engine and others exist)
+Your difference is the question and the diagnosis. Cite those repos in the README; do not copy them
+Scope creep (speculative decoding, Triton kernels, int4)
+Stretch work starts only after the report draft exists
+Time runs short (internship, exams)
+Minimum shippable = Phases 0 to 4 plus a short report
+Agent writes code you cannot explain
+Rewrite it from memory; the core files in Working rules stay yours
+
+Packaging for applications
+The README, the report and the CV bullet must all trace back to files in results/; anything else is a claim a reviewer can catch.
+README sections: one-paragraph summary, architecture diagram, how to run on Windows and Linux, test instructions, results table, the diagnosis in three sentences, limitations, related work (link the crowded-space repos), license.
+Report outline (3 to 4 pages): abstract, setup, method, results, failure analysis, limitations, reproducibility. Write it in Overleaf or Markdown exported to PDF, and commit the PDF.
+CI: run fast tests on a tiny random-weight GPT-2 config, and mark the full-weight Hugging Face comparison @pytest.mark.slow so it runs locally. Add a badge only after the first green run.
+CV bullet template (fill the brackets only from saved results):
+quantlens (Python, PyTorch): Implemented GPT-2 small inference from scratch with a KV cache and int8/W8A8 quantizers; verified logits against Hugging Face to [tolerance] with [N] tests. Diagnosed [finding] using per-layer sensitivity and activation-outlier analysis, and evaluated a SmoothQuant-style fix ([perplexity change]).
+Do not claim: speedups you did not measure, novelty, state-of-the-art results, or findings that are not in a saved results file.
+Using it in applications: link the repo and the PDF report. Describe it as a diagnosis project: question, method, result, limits. That is the same story your TrackML work already tells.
+Day-one checklist
+The first hour ends with a public repo, a working environment and one failing test, which is the correct place to start.
+Search GitHub and PyPI for quantlens; pick the fallback name if it is taken.
+Create the folder, run git init, and create an empty public GitHub repo with the same name.
+Create the environment and install: python -m venv .venv, activate it, then pip install torch transformers datasets pytest matplotlib. On Windows the default torch wheel is the CPU build.
+Write SPEC.md from this doc: the research question, the "from scratch" boundary, the phases and their gates.
+Add the one-line AGENTS.md, CLAUDE.md and GEMINI.md pointer files.
+Write tests/test_logits_match_hf.py first. It loads Hugging Face gpt2, runs 20 prompts and compares logits with your model, so it fails until Phase 1 works.
+Make the first commit and push.
+If the browser sign-in for git push hangs, install the GitHub CLI with winget install GitHub.cli, run gh auth login and use the device-code option.
+When Phase 1 is done, come back with the test output and I will review it before Phase 2.
