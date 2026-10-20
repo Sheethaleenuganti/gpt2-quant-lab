@@ -1,0 +1,56 @@
+{
+  "variant": "v3",
+  "rows": [
+    {
+      "context_len": 128,
+      "use_cache": true,
+      "tokens_per_sec": 17.56,
+      "median_sec": 0.9113,
+      "n_runs": 2,
+      "n_new_tokens": 16
+    },
+    {
+      "context_len": 128,
+      "use_cache": false,
+      "tokens_per_sec": 4.77,
+      "median_sec": 3.356,
+      "n_runs": 2,
+      "n_new_tokens": 16
+    },
+    {
+      "context_len": 512,
+      "use_cache": true,
+      "tokens_per_sec": 10.23,
+      "median_sec": 1.5633,
+      "n_runs": 2,
+      "n_new_tokens": 16
+    },
+    {
+      "context_len": 512,
+      "use_cache": false,
+      "tokens_per_sec": 0.87,
+      "median_sec": 18.4512,
+      "n_runs": 2,
+      "n_new_tokens": 16
+    },
+    {
+      "context_len": 1024,
+      "use_cache": true,
+      "tokens_per_sec": 4.56,
+      "median_sec": 3.5057,
+      "n_runs": 2,
+      "n_new_tokens": 16
+    },
+    {
+      "context_len": 1024,
+      "use_cache": false,
+      "tokens_per_sec": 0.45,
+      "median_sec": 35.5274,
+      "n_runs": 2,
+      "n_new_tokens": 16
+    }
+  ],
+  "torch_version": "2.14.1+cpu",
+  "python": "3.13.5",
+  "date_utc": "2026-10-20T13:35:40+00:00"
+}

@@ -1,0 +1,15 @@
+{
+  "perplexity": 29.245755285856436,
+  "nll_per_token": 3.3757344447149085,
+  "n_tokens": 15871,
+  "n_windows": 30,
+  "max_length": 1024,
+  "stride": 512,
+  "variant": "v1",
+  "weight_bytes": 242955456,
+  "total_test_tokens": 287644,
+  "torch_version": "2.14.1+cpu",
+  "python": "3.13.5",
+  "date_utc": "2026-10-20T13:18:36+00:00",
+  "partial": true
+}

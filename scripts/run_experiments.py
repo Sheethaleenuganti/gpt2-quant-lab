@@ -16,10 +16,27 @@ from quantlens.weights import load_pretrained
 
 RESULTS = Path(__file__).resolve().parent.parent / "results"
 
+def _v3():
+    from quantlens.quant.act import quantize_model_w8a8
+    return quantize_model_w8a8(load_pretrained("gpt2"))
+
+
+def _v4():
+    from quantlens.eval.outliers import collect_activation_stats
+    from quantlens.quant.smooth import quantize_model_smooth
+    model = load_pretrained("gpt2")
+    # Calibrate over 2048 tokens with 1024 context window for representative activation scales
+    calib = load_wikitext2_tokens()[:, :2048]
+    stats = collect_activation_stats(model, calib, max_tokens=1024)
+    return quantize_model_smooth(model, stats, alpha=0.75)
+
+
 VARIANTS = {
     "v0": lambda: load_pretrained("gpt2"),
     "v1": lambda: quantize_model(load_pretrained("gpt2"), "per_tensor"),
     "v2": lambda: quantize_model(load_pretrained("gpt2"), "per_channel"),
+    "v3": _v3,
+    "v4": _v4,
 }
 
 
