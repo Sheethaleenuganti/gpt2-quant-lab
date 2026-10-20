@@ -34,14 +34,15 @@ class LayerNorm(nn.Module):
 
 
 class CausalSelfAttention(nn.Module):
-    def __init__(self, cfg: GPT2Config):
+    def __init__(self, cfg: GPT2Config, layer_idx: int = 0):
         super().__init__()
         assert cfg.n_embd % cfg.n_head == 0
         self.n_head = cfg.n_head
+        self.layer_idx = layer_idx
         self.c_attn = nn.Linear(cfg.n_embd, 3 * cfg.n_embd)
         self.c_proj = nn.Linear(cfg.n_embd, cfg.n_embd)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x, cache=None, past_len: int = 0):
         B, T, C = x.shape
         H = self.n_head
         hd = C // H
@@ -50,11 +51,17 @@ class CausalSelfAttention(nn.Module):
         k = k.view(B, T, H, hd).transpose(1, 2)
         v = v.view(B, T, H, hd).transpose(1, 2)
 
-        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(hd)  # [B, H, T, T]
-        causal = torch.tril(torch.ones(T, T, dtype=torch.bool, device=x.device))
+        if cache is not None:
+            k, v = cache.update(self.layer_idx, k, v)  # now [B, H, past_len + T, hd]
+
+        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(hd)  # [B, H, T, past_len + T]
+        # query i sits at absolute position past_len + i and may see keys j <= past_len + i
+        causal = torch.tril(
+            torch.ones(T, k.size(2), dtype=torch.bool, device=x.device), diagonal=past_len
+        )
         scores = scores.masked_fill(~causal, float("-inf"))
         probs = F.softmax(scores, dim=-1)
-        out = torch.matmul(probs, v)  # [B, H, T, hd]
+        out = torch.matmul(probs, v)
         out = out.transpose(1, 2).contiguous().view(B, T, C)
         return self.c_proj(out)
 
@@ -70,15 +77,15 @@ class MLP(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self, cfg: GPT2Config):
+    def __init__(self, cfg: GPT2Config, layer_idx: int = 0):
         super().__init__()
         self.ln_1 = LayerNorm(cfg.n_embd, cfg.eps)
-        self.attn = CausalSelfAttention(cfg)
+        self.attn = CausalSelfAttention(cfg, layer_idx)
         self.ln_2 = LayerNorm(cfg.n_embd, cfg.eps)
         self.mlp = MLP(cfg)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn(self.ln_1(x))
+    def forward(self, x, cache=None, past_len: int = 0):
+        x = x + self.attn(self.ln_1(x), cache=cache, past_len=past_len)
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -90,15 +97,16 @@ class GPT2(nn.Module):
         c = self.cfg
         self.wte = nn.Embedding(c.vocab_size, c.n_embd)
         self.wpe = nn.Embedding(c.n_ctx, c.n_embd)
-        self.h = nn.ModuleList([Block(c) for _ in range(c.n_layer)])
+        self.h = nn.ModuleList([Block(c, i) for i in range(c.n_layer)])
         self.ln_f = LayerNorm(c.n_embd, c.eps)
 
-    def forward(self, input_ids: torch.Tensor) -> torch.Tensor:
+    def forward(self, input_ids: torch.Tensor, cache=None) -> torch.Tensor:
         B, T = input_ids.shape
-        assert T <= self.cfg.n_ctx, "sequence longer than context window"
-        pos = torch.arange(T, device=input_ids.device)
+        past_len = cache.length if cache is not None else 0  # read once, before layers update it
+        assert past_len + T <= self.cfg.n_ctx, "sequence longer than context window"
+        pos = torch.arange(past_len, past_len + T, device=input_ids.device)
         x = self.wte(input_ids) + self.wpe(pos)
         for block in self.h:
-            x = block(x)
+            x = block(x, cache=cache, past_len=past_len)
         x = self.ln_f(x)
         return torch.matmul(x, self.wte.weight.T)  # output head tied to token embedding
